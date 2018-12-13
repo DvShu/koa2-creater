@@ -1,0 +1,39 @@
+{
+  "name": "koa2-creater",
+  "version": "0.0.1",
+  "description": "命令行快速创建一个 koa2 工程",
+  "main": "index.js",
+  "author": "Tenny",
+  "license": "MIT",
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:ReconcileMySelf/koa2-creater.git"
+  },
+  "homepage": "https://github.com/ReconcileMySelf/koa2-creater",
+  "bugs": {
+    "url": "https://github.com/ReconcileMySelf/koa2-creater/issues"
+  },
+  "keywords": [
+    "koa2",
+    "creater",
+    "build",
+    "cli"
+  ],
+  "files": [
+    "index.js",
+    "lib/*"
+  ],
+  "bin": {
+    "koa2": "index.js"
+  },
+  "dependencies": {
+    "art-template": "^4.13.2",
+    "chalk": "^2.4.1",
+    "commander": "^2.19.0",
+    "download-git-repo": "^1.1.0",
+    "inquirer": "^6.2.1",
+    "log-symbols": "^2.2.0",
+    "ora": "^3.0.0"
+  }
+}
