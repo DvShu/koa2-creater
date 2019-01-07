@@ -1,6 +1,6 @@
 {
   "name": "koa2-creater",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "description": "命令行快速创建一个 koa2 工程",
   "main": "index.js",
   "author": "Tenny",
@@ -8,11 +8,11 @@
   "private": false,
   "repository": {
     "type": "git",
-    "url": "git@github.com:ReconcileMySelf/koa2-creater.git"
+    "url": "git@github.com:DvShu/koa2-creater.git"
   },
-  "homepage": "https://github.com/ReconcileMySelf/koa2-creater",
+  "homepage": "https://github.com/DvShu/koa2-creater",
   "bugs": {
-    "url": "https://github.com/ReconcileMySelf/koa2-creater/issues"
+    "url": "https://github.com/DvShu/koa2-creater/issues"
   },
   "keywords": [
     "koa2",
@@ -22,7 +22,9 @@
   ],
   "files": [
     "index.js",
-    "lib/*"
+    "lib/*",
+    "README.md",
+    "LICENSE"
   ],
   "bin": {
     "koa2": "index.js"

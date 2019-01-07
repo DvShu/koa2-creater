@@ -73,6 +73,7 @@ function inquire() {
         des.push('koa-session');
       }
       if (source.template === 'y') {
+        des.push('art-template');
         des.push('koa-art-template');
       }
       if (source.mongo) {
