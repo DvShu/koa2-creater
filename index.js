@@ -125,7 +125,7 @@ function inquire() {
     });
 }
 
-program.version('0.0.5', '-v, --version')
+program.version('0.0.6', '-v, --version')
   .command('init <name>')
   .action(name => {
     fs.access(name, fs.constants.F_OK, (err) => {
