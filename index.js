@@ -106,8 +106,7 @@ function inquire() {
       }
       spinner.succeed('获取依赖插件成功!');
       spinner.start('模板编译……');
-      let publicPath = path.join(source.name, 'public');
-      return util.promisify(fs.rename)(path.join(publicPath, '_name_'), path.join(publicPath, source.name))
+      return Promise.resolve(0);
     })
     .then(() => {
       let render = new Render(source);
