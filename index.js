@@ -4,139 +4,203 @@
  */
 const program = require('commander');
 const util = require('util');
-const downloadGitRepo = require('download-git-repo');
-const download = util.promisify(downloadGitRepo);
+const download = util.promisify(require('download-git-repo'));
 const inquirer = require('inquirer');
 const chalk = require('chalk');
 const symbols = require('log-symbols');
-const fs = require('fs');
+const fs = require('fs-extra');
 const path = require('path');
-const ora = require('ora');
-const spinner = ora();
-const packageSearch = require('./lib/package_search');
-const fs2 = require('./lib/fs_spread');
-const Render = require('./lib/render');
+const spinner = require('ora')();
+const { listFiles, packageSearch } = require('./lib/utils');
+const ejs = require('ejs');
 
-const date = new Date();
-const datetime = date.getFullYear() + '/' + (date.getMonth() + 1) + '/' +
-  date.getDate() + ' ' + date.getHours() + ':' + date.getMinutes();
-
-let source = {
-  datetime,
-  time: date.getTime()
-};
-
-function inquire() {
-  inquirer.prompt([
-    {
-      type: 'input',
-      name: 'session',
-      message: '是否需要使用session(koa-session),[y/n]?'
-    },
-    {
-      type: 'input',
-      name: 'template',
-      message: '是否需要使用模板引擎(art-template),[y/n]?'
-    },
-    {
-      type: 'input',
-      name: 'test',
-      message: '是否需要 mocha + supertest 进行单元测试,[y/n]?'
-    },
-    {
-      type: 'input',
-      name: 'mongo',
-      message: '不填表示不使用mongo,[test@mongo:127.0.0.1:27017/test]'
-    }
-  ]).then((answers) => {
-    if (answers.mongo && !answers.mongo.includes('@')) {
-      return Promise.reject('mongo url must includes @');
-    } else {
-      spinner.start('正在下载模板……');
-      answers.mongo = answers.mongo ? answers.mongo.split('@') : null;
-      Object.assign(source, answers);
-      return download('github:ReconcileMySelf/koa2-template', source.name, { clone: true });
-    }
-  })
-    .then(() => { // 模板下载完成
-      spinner.succeed('模板下载成功!');
-      spinner.start('获取依赖插件……');
-      let des = [
-        'koa',
-        'log4js',
-        'koa-router',
-        'koa-static-cache',
-        'koa-log4js-base',
-        'koa-bodyparser'
-      ], deleteFiles = [];
-      if (source.session === 'y') {
-        des.push('koa-session');
-      }
-      if (source.template === 'y') {
-        des.push('art-template');
-        des.push('koa-art-template');
-      }
-      if (source.mongo) {
-        des.push('mongodb');
-        des.push('mongo-adapt');
-      } else {
-        deleteFiles.push(path.join(source.name, 'dbs'));
-      }
-      if (source.test === 'y') {
-        des.push('mocha');
-        des.push('supertest');
-      } else {
-        deleteFiles.push(path.join(source.name, 'test'));
-      }
-      return fs2.rmdirs(deleteFiles).then(() => {
-        return Promise.resolve(des);
-      }); // 删除不需要的目录
-    })
-    .then(des => {
-      return Promise.all(des.map(v => {
-        return packageSearch(v)
-      }))
-    })
-    .then(ar => {
-      if (source.test === 'y') {
-        source.dependencies = ar.slice(0, ar.length - 2);
-        source.testDependencies = ar.slice(ar.length - 2);
-      } else {
-        source.dependencies = ar;
-      }
-      spinner.succeed('获取依赖插件成功!');
-      spinner.start('模板编译……');
-      return Promise.resolve(0);
-    })
-    .then(() => {
-      let render = new Render(source);
-      fs2.listFiles(source.name, function(n) {
-        render.render(n);
-      });
-      setTimeout(() => {
-        spinner.succeed('模板编译成功!');
-        console.log(symbols.success, chalk.green('工程构建成功!'));
-      }, 200);
-    })
-    .catch(err => {
-      console.error(err);
-      spinner.fail('工程构建失败!');
-      console.log(symbols.error, chalk.red('工程构建失败'));
-    });
+function log(msg = '', level) {
+  if (level != null) {
+    console.log(symbols[level], msg);
+  } else {
+    console.log(msg);
+  }
 }
 
-program.version('0.0.6', '-v, --version')
+let TEMP_TEMPLATE_FILENAME = '_koa2-template_';
+
+const prompt = [
+  {
+    "type": "confirm",
+    "name": "session",
+    "message": "是否需要使用session(koa-session)?"
+  },
+  {
+    "type": "confirm",
+    "name": "template",
+    "message": "是否需要使用模板引擎(ejs)?"
+  },
+  {
+    "type": "confirm",
+    "name": "test",
+    "message": "是否需要 mocha + supertest 进行单元测试?"
+  },
+  {
+    "type": "confirm",
+    "name": "mongo",
+    "message": "是否需要连接 mongodb?"
+  },
+  {
+    "type": "input",
+    "name": "mongoUrl",
+    "message": "mongo连接：[连接名@连接地址]",
+    "when": function(aw) {
+      return aw.mongo;
+    },
+    "validate": function(input) {
+      return input.includes('@') ? true : '连接地址必须包含 @';
+    }
+  }
+];
+
+const D = {
+  "session": {
+    "dependencies": ["koa-session"]
+  },
+  "template": {
+    "dependencies": ["koa-ejs"]
+  },
+  "mongo": {
+    "dependencies": ["mongodb", "mongo-adapt"]
+  },
+  "test": {
+    "devDependencies": ["mocha", "supertest"]
+  }
+};
+
+program
+  .version(require('./package.json').version)
+  .usage('<command> [options]');
+
+program
   .command('init <name>')
-  .action(name => {
-    fs.access(name, fs.constants.F_OK, (err) => {
-      if (err) {
-        source.name = name;
-        inquire();
-      } else { // 文件存在
-        // 错误提示项目已存在，避免覆盖原有项目
-        console.log(symbols.error, chalk.red('项目已存在'));
+  .description('create a new project')
+  .alias('create')
+  .option("-d, --dir [dir]", "The project directory, default: [.]", '.')
+  .allowUnknownOption()
+  .action(function(name, options) {
+    let proPath = path.join(options.dir, name);
+    // 判断目录是否存在
+    fs.pathExists(proPath, (err, exists) => {
+      if (!exists) { // 工程不存在
+        spinner.start('start download template koa2-template-simple……');
+        let tempPath = path.join(options.dir, TEMP_TEMPLATE_FILENAME), source = { name, time: Date.now() };
+        // github: DvShu/koa2-template-simple
+        download('direct:git@gitee.com:towardly/koa2-template-simple.git', tempPath, { clone: true })
+          .then((tJson) => {
+            spinner.succeed('template downloaded!');
+            return inquirer.prompt(prompt);
+          })
+          .then((aw) => {
+            aw.mongoUrl = aw.mongo ? aw.mongoUrl.split('@') : null;
+            Object.assign(source, aw);
+            let dep = [
+              "koa",
+              "log4js",
+              "koa-router",
+              "koa-static-cache",
+              "koa-log4js-base",
+              "koa-bodyparser"
+            ];
+            let devDep = [];
+            for (let k in aw) {
+              if (aw[k] === true) {
+                let cd = D[k] || {};
+                dep = dep.concat(cd.dependencies || []);
+                devDep = devDep.concat(cd.devDependencies || []);
+              }
+            }
+            source.devLength = devDep.length;
+            return Promise.all(dep.concat(devDep).map(v => {
+              return packageSearch(v)
+            }))
+          })
+          .then((ar) => {
+            source.dep = [];
+            source.dep = ar.slice(0, ar.length - source.devLength);
+            source.devDep = ar.slice(ar.length - source.devLength);
+            spinner.succeed('获取依赖插件成功!');
+          })
+          .then(() => {
+            spinner.start('编译模板……');
+            return fs.copy(path.join(tempPath, 'template'), path.join(options.dir, name), {
+              filter: function(filterName) {
+                let fileBasename = path.basename(filterName);
+                if (fileBasename === 'dbs') {
+                  return source.mongo;
+                } else if (fileBasename === 'test') {
+                  return source.test;
+                } else if (fileBasename === 'views') {
+                  return source.template;
+                }
+                return true;
+              }
+            });
+          })
+          .then(() => {
+            listFiles(path.join(options.dir, name), (filepath) => {
+              let filePathObj = path.parse(filepath);
+              if (filePathObj.name.startsWith('_')) { // 需要进行模板编译
+                fs.rename(filepath, path.join(filePathObj.dir, filePathObj.name.substring(1) + filePathObj.ext));
+              } else if (filePathObj.ext === '.ejs') {
+                ejs.renderFile(filepath, source, (err, tplStr) => {
+                  fs.writeFile(path.join(filePathObj.dir, filePathObj.name), tplStr, (err) => {
+                    if (err) {
+                      log(err, 'error');
+                    } else {
+                      fs.unlink(filepath);
+                    }
+                  });
+                })
+              }
+            });
+            return fs.emptyDir(tempPath);
+          })
+          .then(() => {
+            fs.rmdir(tempPath);
+            spinner.succeed('模板编译成功');
+            log();
+            log(chalk.green('工程构建成功：' + path.join(options.dir, name)), 'success');
+          })
+          .catch(err => {
+            log(chalk.red(err), 'error');
+            process.exit(0);
+          })
+      } else {
+        log(chalk.red(`${proPath} is already exists!`), 'error');
+        process.exit(1);
       }
     });
   });
 
+program.Command.prototype['unknownOption'] = function (o) {
+  if (this._allowUnknownOption) {
+    return;
+  }
+  log();
+  this.outputHelp();
+  log();
+  log(chalk.red(`unknown option: ${o}`), 'error');
+  log();
+};
+
+
+program.on('command:*', () => {
+  log();
+  program.outputHelp();
+  log();
+  log(chalk.red('Invalid command: %s'), 'error');
+  log();
+  process.exit(1);
+});
+
 program.parse(process.argv);
+
+if (!process.argv.slice(2).length) {
+  program.outputHelp();
+}
