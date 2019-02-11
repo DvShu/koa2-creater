@@ -101,10 +101,9 @@ program
             Object.assign(source, aw);
             let dep = [
               "koa",
-              "log4js",
               "koa-router",
               "koa-static-cache",
-              "koa-log4js-base",
+              "self-log",
               "koa-bodyparser"
             ];
             let devDep = [];
