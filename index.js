@@ -33,27 +33,35 @@ const prompt = [
   {
     "type": "confirm",
     "name": "template",
-    "message": "是否需要使用模板引擎(ejs)?"
+    "message": "是否需要使用模板引擎(art-template)?"
   },
   {
     "type": "confirm",
     "name": "test",
-    "message": "是否需要 mocha + supertest 进行单元测试?"
+    "message": "是否需要 ava + supertest 进行单元测试?"
   },
   {
     "type": "confirm",
     "name": "mongo",
-    "message": "是否需要连接 mongodb?"
+    "message": "是否需要连接 mongodb(mongoose)?"
   },
   {
     "type": "input",
     "name": "mongoUrl",
-    "message": "mongo连接：[连接名@连接地址]",
+    "message": "mongo连接：[mongodb://root:pwd@ip:port/admin]",
     "when": function(aw) {
       return aw.mongo;
     },
     "validate": function(input) {
       return input.includes('@') ? true : '连接地址必须包含 @';
+    }
+  },
+  {
+    "type": "input",
+    "name": "dbs",
+    "message": "mongo数据库(,分隔,不能有空格):admin1,admin2,admin2",
+    "when": function(aw) {
+      return aw.mongo;
     }
   }
 ];
@@ -63,13 +71,13 @@ const D = {
     "dependencies": ["koa-session"]
   },
   "template": {
-    "dependencies": ["koa-ejs"]
+    "dependencies": ["art-template", "koa-art-template"]
   },
   "mongo": {
-    "dependencies": ["mongodb", "mongo-adapt"]
+    "dependencies": ["mongoose"]
   },
   "test": {
-    "devDependencies": ["mocha", "supertest"]
+    "devDependencies": ["ava", "supertest"]
   }
 };
 
@@ -92,12 +100,12 @@ program
         let tempPath = path.join(options.dir, TEMP_TEMPLATE_FILENAME), source = { name, time: Date.now() };
         // github: DvShu/koa2-template-simple
         download('direct:git@gitee.com:towardly/koa2-template-simple.git', tempPath, { clone: true })
-          .then((tJson) => {
+          .then(() => {
             spinner.succeed('template downloaded!');
             return inquirer.prompt(prompt);
           })
           .then((aw) => {
-            aw.mongoUrl = aw.mongo ? aw.mongoUrl.split('@') : null;
+			aw.dbs = aw.dbs.split(',');
             Object.assign(source, aw);
             let dep = [
               "koa",
@@ -187,7 +195,6 @@ program.Command.prototype['unknownOption'] = function (o) {
   log(chalk.red(`unknown option: ${o}`), 'error');
   log();
 };
-
 
 program.on('command:*', () => {
   log();
