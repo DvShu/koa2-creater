@@ -105,7 +105,7 @@ program
             return inquirer.prompt(prompt);
           })
           .then((aw) => {
-			aw.dbs = aw.dbs.split(',');
+			      aw.dbs = (aw.dbs || '').split(',');
             Object.assign(source, aw);
             let dep = [
               "koa",
